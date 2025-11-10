@@ -1,10 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { AnalysisResult } from '../types';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable is not set");
-}
-
+// Fix: Per coding guidelines, the API key must be obtained exclusively from process.env.API_KEY. This resolves the error on import.meta.env.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const analysisSchema = {
