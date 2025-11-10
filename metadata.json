@@ -1,0 +1,5 @@
+{
+  "name": "AI Content Detector",
+  "description": "An advanced tool that utilizes Gemini with Google Search grounding to analyze text and estimate the probability of it being AI-generated, providing a detailed breakdown and source verification.",
+  "requestFramePermissions": []
+}
