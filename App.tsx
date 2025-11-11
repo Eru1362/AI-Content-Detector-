@@ -9,7 +9,7 @@ import { RephrasedContentDisplay } from './components/RephrasedContentDisplay';
 import { History } from './components/History';
 import { analyzeContent, rephraseContent } from './services/geminiService';
 import type { AnalysisResult } from './types';
-import { LoaderIcon, XIcon } from './components/icons';
+import { LoaderIcon, XIcon, AlertTriangleIcon, RefreshCwIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [content, setContent] = useState<string>('');
@@ -20,7 +20,8 @@ const App: React.FC = () => {
   const [isRephrasing, setIsRephrasing] = useState<boolean>(false);
   const [rephraseStatus, setRephraseStatus] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; onRetry?: () => void } | null>(null);
+  const [analysisMode, setAnalysisMode] = useState<'fast' | 'deep'>('fast');
   
   const [history, setHistory] = useState<string[]>(() => {
     try {
@@ -48,6 +49,10 @@ const App: React.FC = () => {
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(event.target.value);
   };
+  
+  const handleModeChange = (newMode: 'fast' | 'deep') => {
+      setAnalysisMode(newMode);
+  };
 
   const handleAnalyze = useCallback(async () => {
     if (!content.trim()) return;
@@ -57,18 +62,19 @@ const App: React.FC = () => {
     setOriginalContentForCompare(null);
     setError(null);
     try {
-      const result = await analyzeContent(content);
+      const result = await analyzeContent(content, analysisMode);
       setAnalysisResult(result);
       setHistory(prevHistory => {
           const newHistory = [content, ...prevHistory.filter(item => item !== content)];
           return newHistory.slice(0, 10); // Keep last 10 items
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setError({ message, onRetry: handleAnalyze });
     } finally {
       setIsLoading(false);
     }
-  }, [content]);
+  }, [content, analysisMode]);
 
   const handleAutoRephrase = async () => {
     if (!content.trim()) return;
@@ -82,7 +88,7 @@ const App: React.FC = () => {
     let initialAnalysis = analysisResult;
     if (!initialAnalysis) {
         setRephraseStatus('Running initial analysis...');
-        initialAnalysis = await analyzeContent(content);
+        initialAnalysis = await analyzeContent(content, 'deep'); // Use deep for rephrasing analysis
         setAnalysisResult(initialAnalysis);
     }
     
@@ -104,7 +110,7 @@ const App: React.FC = () => {
             const rephrased = await rephraseContent(currentContentToRephrase); // No custom prompt
             
             setRephraseStatus(`Attempt ${i}/${maxAttempts}: Analyzing new version...`);
-            const newAnalysis = await analyzeContent(rephrased);
+            const newAnalysis = await analyzeContent(rephrased, 'deep'); // Use deep for rephrasing analysis
             const newScore = newAnalysis.data.aiScore;
 
             if (newScore < bestScore) {
@@ -119,7 +125,7 @@ const App: React.FC = () => {
 
         } catch (err) {
             const message = err instanceof Error ? err.message : 'An unknown error occurred.';
-            setError(message);
+            setError({ message, onRetry: handleAutoRephrase });
             break;
         }
     }
@@ -152,7 +158,8 @@ const App: React.FC = () => {
       const result = await rephraseContent(content, prompt);
       setRephrasedContent(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred during rephrasing.');
+      const message = err instanceof Error ? err.message : 'An unknown error occurred during rephrasing.';
+      setError({ message, onRetry: () => handleRephraseWithPrompt(prompt) });
     } finally {
       setIsRephrasing(false);
       setIsModalOpen(false);
@@ -188,15 +195,39 @@ const App: React.FC = () => {
       <Header />
       <main className="container mx-auto p-4 md:p-6 lg:p-8">
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-6 flex items-center justify-between" role="alert">
-            <div>
-              <strong className="font-bold">Error: </strong>
-              <span className="block sm:inline">{error}</span>
+            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md relative mb-6 flex items-start justify-between gap-4" role="alert">
+                <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 pt-0.5">
+                        <AlertTriangleIcon className="h-5 w-5 text-red-500"/>
+                    </div>
+                    <div>
+                        <p className="font-bold">An Error Occurred</p>
+                        <p className="text-sm">{error.message}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 -mt-1 -mr-1">
+                {error.onRetry && (
+                    <button
+                    onClick={() => {
+                        const retryFn = error.onRetry;
+                        setError(null);
+                        retryFn?.();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-800 bg-red-200 rounded-md hover:bg-red-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-red-100"
+                    >
+                    <RefreshCwIcon className="h-3 w-3" />
+                    Retry
+                    </button>
+                )}
+                <button
+                    onClick={() => setError(null)}
+                    className="p-1.5 rounded-full text-red-800 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-red-100"
+                    aria-label="Dismiss"
+                >
+                    <XIcon className="h-5 w-5" />
+                </button>
+                </div>
             </div>
-            <button onClick={() => setError(null)} className="p-1 rounded-full hover:bg-red-200">
-                <XIcon className="h-5 w-5"/>
-            </button>
-          </div>
         )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
           <div className="space-y-6">
@@ -206,6 +237,8 @@ const App: React.FC = () => {
               onAnalyze={handleAnalyze}
               isLoading={isLoading || isRephrasing}
               wordCount={wordCount}
+              analysisMode={analysisMode}
+              onModeChange={handleModeChange}
             />
             {isRephrasing && (
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 border border-slate-200 dark:border-slate-700 space-y-4">

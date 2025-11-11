@@ -74,14 +74,16 @@ Provide a detailed analysis based on several key metrics:
 For each piece of text, you must return a JSON object that strictly adheres to the provided schema. Do not add any extra text or formatting outside of the JSON object.
 The main 'aiScore' should be your overall confidence score. The 'analysis' array should break down your reasoning. The 'externalAnalysis' should be your *prediction* of how other tools would score the text based on their typical detection patterns.`;
 
-export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
+export const analyzeContent = async (text: string, mode: 'fast' | 'deep'): Promise<AnalysisResult> => {
   if (!text) {
     throw new Error("Content cannot be empty.");
   }
+  
+  const modelName = mode === 'fast' ? 'gemini-2.5-flash' : 'gemini-2.5-pro';
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: modelName,
       contents: {
         parts: [{ text: `Please analyze the following text:\n\n---\n\n${text}` }]
       },
