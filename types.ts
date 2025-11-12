@@ -19,4 +19,5 @@ export interface AnalysisData {
 
 export interface AnalysisResult {
   data: AnalysisData;
+  content: string;
 }

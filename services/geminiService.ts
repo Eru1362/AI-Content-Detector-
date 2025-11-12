@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { AnalysisResult } from '../types';
+import type { AnalysisResult, AnalysisData } from '../types';
 
 // Fix: Per coding guidelines, the API key must be obtained exclusively from process.env.API_KEY. This resolves the error on import.meta.env.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -97,8 +97,8 @@ export const analyzeContent = async (text: string, mode: 'fast' | 'deep'): Promi
 
     const jsonText = response.text.trim();
     const cleanJson = jsonText.replace(/^```json\s*|```\s*$/g, '');
-    const result = JSON.parse(cleanJson);
-    return { data: result };
+    const result: AnalysisData = JSON.parse(cleanJson);
+    return { data: result, content: text };
 
   } catch (error) {
     console.error("Error analyzing content with Gemini:", error);

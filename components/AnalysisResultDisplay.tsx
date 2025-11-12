@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { AnalysisResult } from '../types';
-import { ClipboardIcon, SparklesIcon, WandIcon, CheckCircleIcon } from './icons';
+import { ClipboardIcon, SparklesIcon, WandIcon, CheckCircleIcon, Share2Icon } from './icons';
 import { Tooltip } from './Tooltip';
 
 const ScoreGauge: React.FC<{ score: number }> = ({ score }) => {
@@ -70,7 +70,8 @@ interface AnalysisResultDisplayProps {
 }
 
 export const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ isLoading, result, onAutoRephrase, onCustomRephrase }) => {
-  const [copied, setCopied] = useState(false);
+  const [summaryCopied, setSummaryCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   if (isLoading) {
     return <AnalysisSkeleton />;
@@ -84,8 +85,22 @@ export const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ is
 
   const copySummaryToClipboard = () => {
     navigator.clipboard.writeText(summary);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setSummaryCopied(true);
+    setTimeout(() => setSummaryCopied(false), 2000);
+  };
+
+  const handleGetLink = () => {
+    if (!result) return;
+    try {
+        const jsonString = JSON.stringify(result);
+        const encodedData = btoa(jsonString);
+        const url = `${window.location.origin}${window.location.pathname}?preview=${encodedData}`;
+        navigator.clipboard.writeText(url);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2500);
+    } catch (e) {
+        console.error('Failed to create preview link', e);
+    }
   };
   
   return (
@@ -96,9 +111,9 @@ export const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ is
           <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Analysis Complete</h3>
           <div className="flex items-center gap-2 mt-2 justify-center md:justify-start">
             <p className="text-slate-600 dark:text-slate-300 italic">"{summary}"</p>
-            <Tooltip content={copied ? "Copied!" : "Copy Summary"}>
+            <Tooltip content={summaryCopied ? "Copied!" : "Copy Summary"}>
                 <button onClick={copySummaryToClipboard} className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                    {copied ? <CheckCircleIcon className="h-4 w-4 text-green-500" /> : <ClipboardIcon className="h-4 w-4 text-slate-500" />}
+                    {summaryCopied ? <CheckCircleIcon className="h-4 w-4 text-green-500" /> : <ClipboardIcon className="h-4 w-4 text-slate-500" />}
                 </button>
             </Tooltip>
           </div>
@@ -132,12 +147,27 @@ export const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ is
                 <WandIcon className="h-5 w-5" />
                 Auto-Rephrase
             </button>
-              <button onClick={onCustomRephrase} className="inline-flex w-full sm:w-auto justify-center items-center gap-2 px-6 py-2.5 font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 rounded-md hover:bg-slate-300 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-200">
+            <button onClick={onCustomRephrase} className="inline-flex w-full sm:w-auto justify-center items-center gap-2 px-6 py-2.5 font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 rounded-md hover:bg-slate-300 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-200">
                 <SparklesIcon className="h-5 w-5" />
                 Rephrase with Prompt
             </button>
         </div>
       </div>
+       <div className="border-t border-slate-200 dark:border-slate-700 pt-4 flex justify-center">
+            <button onClick={handleGetLink} className="inline-flex w-full sm:w-auto justify-center items-center gap-2 px-4 py-2 font-semibold text-sm text-slate-600 dark:text-slate-300 bg-transparent rounded-md hover:bg-slate-200 dark:hover:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-200">
+                {linkCopied ? (
+                    <>
+                        <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                        Link Copied!
+                    </>
+                ) : (
+                    <>
+                        <Share2Icon className="h-5 w-5" />
+                        Get Preview Link
+                    </>
+                )}
+            </button>
+        </div>
     </div>
   );
 };

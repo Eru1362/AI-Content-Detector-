@@ -34,6 +34,29 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const previewData = params.get('preview');
+    if (previewData) {
+      try {
+        const decodedJson = atob(previewData);
+        const parsedResult: AnalysisResult = JSON.parse(decodedJson);
+        if (parsedResult && parsedResult.data && typeof parsedResult.content === 'string') {
+          setAnalysisResult(parsedResult);
+          setContent(parsedResult.content);
+        } else {
+          console.warn('Invalid preview data structure.');
+          setError({ message: 'The preview link is invalid or corrupted.' });
+        }
+      } catch (e) {
+        console.error('Failed to parse preview data from URL', e);
+        setError({ message: 'Could not load the analysis from the preview link.' });
+      } finally {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     try {
         window.localStorage.setItem('analysisHistory', JSON.stringify(history));
     } catch (error) {
