@@ -14,8 +14,8 @@ import { LoaderIcon, XIcon, AlertTriangleIcon, RefreshCwIcon } from './component
 const App: React.FC = () => {
   const [content, setContent] = useState<string>('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [rephrasedContent, setRephrasedContent] = useState<string>('');
-  const [originalContentForCompare, setOriginalContentForCompare] = useState<string | null>(null);
+  const [originalAnalysisForCompare, setOriginalAnalysisForCompare] = useState<AnalysisResult | null>(null);
+  const [rephrasedAnalysisForCompare, setRephrasedAnalysisForCompare] = useState<AnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isRephrasing, setIsRephrasing] = useState<boolean>(false);
   const [rephraseStatus, setRephraseStatus] = useState<string | null>(null);
@@ -81,8 +81,8 @@ const App: React.FC = () => {
     if (!content.trim()) return;
     setIsLoading(true);
     setAnalysisResult(null);
-    setRephrasedContent('');
-    setOriginalContentForCompare(null);
+    setOriginalAnalysisForCompare(null);
+    setRephrasedAnalysisForCompare(null);
     setError(null);
     try {
       const result = await analyzeContent(content, analysisMode);
@@ -104,46 +104,64 @@ const App: React.FC = () => {
 
     setIsRephrasing(true);
     setError(null);
-    setRephrasedContent('');
-    setOriginalContentForCompare(content);
+    setRephrasedAnalysisForCompare(null);
 
-    let bestContent = content;
-    let initialAnalysis = analysisResult;
-    if (!initialAnalysis) {
-        setRephraseStatus('Running initial analysis...');
-        initialAnalysis = await analyzeContent(content, 'deep'); // Use deep for rephrasing analysis
+    let initialAnalysis;
+    setRephraseStatus('Running initial analysis...');
+    try {
+        initialAnalysis = await analyzeContent(content, 'deep');
         setAnalysisResult(initialAnalysis);
+    } catch(err) {
+        const message = err instanceof Error ? err.message : 'An unknown error occurred during initial analysis.';
+        setError({ message, onRetry: handleAutoRephrase });
+        setIsRephrasing(false);
+        setRephraseStatus(null);
+        return;
     }
     
+    setOriginalAnalysisForCompare(initialAnalysis);
+    
+    let bestContent = content;
+    let bestAnalysis = initialAnalysis;
     let bestScore = initialAnalysis.data.aiScore;
     
     const maxAttempts = 5;
+    const targetScore = 10;
+
+    if (bestScore < targetScore) {
+      setRephraseStatus(`Initial score is already ${bestScore}%. No rephrasing needed.`);
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      setOriginalAnalysisForCompare(null);
+      setIsRephrasing(false);
+      setRephraseStatus(null);
+      return;
+    }
 
     for (let i = 1; i <= maxAttempts; i++) {
-        if (bestScore === 0) {
-            setRephraseStatus(`Target of 0% AI score reached!`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            break;
-        }
-
-        setRephraseStatus(`Attempt ${i}/${maxAttempts}: Rephrasing content... (Best score: ${bestScore}%)`);
+        setRephraseStatus(`Attempt ${i}/${maxAttempts}: Humanizing content... (Best score: ${bestScore}%)`);
         
         try {
-            const currentContentToRephrase = (i === 1 || bestContent === content) ? content : bestContent;
-            const rephrased = await rephraseContent(currentContentToRephrase); // No custom prompt
+            const rephrased = await rephraseContent(bestContent);
             
             setRephraseStatus(`Attempt ${i}/${maxAttempts}: Analyzing new version...`);
-            const newAnalysis = await analyzeContent(rephrased, 'deep'); // Use deep for rephrasing analysis
+            const newAnalysis = await analyzeContent(rephrased, 'deep');
             const newScore = newAnalysis.data.aiScore;
 
             if (newScore < bestScore) {
                 setRephraseStatus(`Improvement found! New best score: ${newScore}%`);
                 bestScore = newScore;
                 bestContent = rephrased;
+                bestAnalysis = newAnalysis;
                 await new Promise(resolve => setTimeout(resolve, 1500));
             } else {
                  setRephraseStatus(`Attempt ${i}/${maxAttempts}: No improvement found. Trying again...`);
                  await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+
+            if (bestScore < targetScore) {
+                setRephraseStatus(`Target of <${targetScore}% AI score reached! Final score: ${bestScore}%.`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                break;
             }
 
         } catch (err) {
@@ -154,11 +172,11 @@ const App: React.FC = () => {
     }
     
     if (bestContent !== content) {
-        setRephrasedContent(bestContent);
+        setRephrasedAnalysisForCompare(bestAnalysis);
     } else {
         setRephraseStatus('Could not improve the score further.');
         await new Promise(resolve => setTimeout(resolve, 2000));
-        setOriginalContentForCompare(null); // No changes to show
+        setOriginalAnalysisForCompare(null);
     }
 
     setIsRephrasing(false);
@@ -174,12 +192,21 @@ const App: React.FC = () => {
     setIsRephrasing(true);
     setRephraseStatus('Generating new version with your instructions...');
     setError(null);
-    setRephrasedContent('');
-    setOriginalContentForCompare(content);
+    setRephrasedAnalysisForCompare(null);
+
+    let originalAnalysis = analysisResult;
+    if (!originalAnalysis || originalAnalysis.content !== content) {
+        setRephraseStatus('Analyzing original content for comparison...');
+        originalAnalysis = await analyzeContent(content, 'deep');
+        setAnalysisResult(originalAnalysis);
+    }
+    setOriginalAnalysisForCompare(originalAnalysis);
 
     try {
-      const result = await rephraseContent(content, prompt);
-      setRephrasedContent(result);
+      const resultText = await rephraseContent(content, prompt);
+      setRephraseStatus('Analyzing new version...');
+      const resultAnalysis = await analyzeContent(resultText, 'deep');
+      setRephrasedAnalysisForCompare(resultAnalysis);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An unknown error occurred during rephrasing.';
       setError({ message, onRetry: () => handleRephraseWithPrompt(prompt) });
@@ -191,18 +218,15 @@ const App: React.FC = () => {
   };
   
   const handleAcceptRephrase = (newText: string) => {
-    setRephrasedContent('');
-    setOriginalContentForCompare(null);
     setContent(newText);
-    // Use timeout to allow state to update before triggering re-analysis
-    setTimeout(() => {
-        handleAnalyze();
-    }, 100);
+    setAnalysisResult(rephrasedAnalysisForCompare);
+    setOriginalAnalysisForCompare(null);
+    setRephrasedAnalysisForCompare(null);
   };
 
   const handleDiscardRephrase = () => {
-    setRephrasedContent('');
-    setOriginalContentForCompare(null);
+    setOriginalAnalysisForCompare(null);
+    setRephrasedAnalysisForCompare(null);
   };
 
   const handleSelectHistoryItem = (item: string) => {
@@ -273,10 +297,10 @@ const App: React.FC = () => {
                 </div>
             )}
             
-            {rephrasedContent && originalContentForCompare && !isRephrasing ? (
+            {rephrasedAnalysisForCompare && originalAnalysisForCompare && !isRephrasing ? (
               <RephrasedContentDisplay 
-                originalText={originalContentForCompare}
-                rephrasedText={rephrasedContent}
+                originalAnalysis={originalAnalysisForCompare}
+                rephrasedAnalysis={rephrasedAnalysisForCompare}
                 onAccept={handleAcceptRephrase}
                 onDiscard={handleDiscardRephrase}
               />

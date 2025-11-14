@@ -111,16 +111,20 @@ export const rephraseContent = async (text: string, customPrompt?: string): Prom
         throw new Error("Content to rephrase cannot be empty.");
     }
 
-    const systemInstruction = `You are an expert content editor and copywriter. Your task is to rewrite the provided text.
-Your primary goal is to instill a strong, authoritative, and distinctly human voice into the text.
-The rephrased content should be engaging, clear, and natural.
-Focus on varying sentence structure, using vivid language, and eliminating any robotic or overly formal phrasing.
-The user will provide specific instructions. If they don't, your default goal is to make the text sound as human-written as possible, prioritizing a compelling and authentic voice over a low AI score.
+    const systemInstruction = `You are an expert content editor specializing in making AI-generated text undetectable. Your task is to rewrite the provided text.
+Your primary goal is to reduce the likelihood of the text being flagged by AI content detectors.
+Focus on techniques that lower AI detection scores:
+- **Increase Burstiness**: Vary sentence length and structure dramatically. Mix short, punchy sentences with longer, more complex ones.
+- **Increase Perplexity**: Use less predictable word choices and sentence constructions. Avoid common AI phrases and transitions.
+- **Humanize Vocabulary**: Introduce colloquialisms, idioms, or slightly less formal language where appropriate, without sacrificing the core meaning.
+- **Break Patterns**: Actively look for and eliminate repetitive sentence starts, uniform paragraph lengths, and other robotic patterns.
+
+The user may provide specific instructions. If they don't, your default and ONLY goal is to rewrite the text to achieve the lowest possible AI detection score.
 Return ONLY the rephrased text, with no preamble or explanation.`;
 
     const userPrompt = customPrompt 
         ? `My specific instruction is: "${customPrompt}". Please apply this to the text below.`
-        : `Please rephrase this text to make it sound as human-written as possible, giving it an engaging and authoritative voice.`;
+        : `Please rephrase this text to achieve the lowest possible AI detection score, using techniques like increasing burstiness and perplexity.`;
 
     try {
         const response = await ai.models.generateContent({
